@@ -139,6 +139,26 @@
   let slotRef: Array<HTMLElement> = [];
   let slotYPositions: Record<string, DOMRect> = {};
 
+  const recalibrateSlotPositions = (ref: Array<HTMLElement>) =>
+    ref.reduce<Record<string, DOMRect>>((allPositions, currentSlot, i) => {
+      if (currentSlot) allPositions[i] = currentSlot.getBoundingClientRect();
+      return allPositions;
+    }, {});
+
+  $: {
+    if (
+      start_hour ||
+      end_hour ||
+      slot_size ||
+      show_header ||
+      allow_date_change
+    ) {
+      // Changes to these props changes the height of our slot buttons
+      slotRef = slotRef.filter(Boolean);
+      slotYPositions = recalibrateSlotPositions(slotRef);
+    }
+  }
+
   $: calendarID = "";
   onMount(async () => {
     await tick();
@@ -162,13 +182,7 @@
     loading = false;
     calendarID = calendarsList?.find((cal) => cal.is_primary)?.id || "";
 
-    slotYPositions = slotRef.reduce<Record<string, DOMRect>>(
-      (allPositions, currentSlot, i) => {
-        if (currentSlot) allPositions[i] = currentSlot.getBoundingClientRect();
-        return allPositions;
-      },
-      {},
-    );
+    slotYPositions = recalibrateSlotPositions(slotRef);
   });
 
   $: {
@@ -1359,7 +1373,7 @@
         const [currentTouchedSlotIndex] = currentTouchedSlotPosition;
 
         currentTouchedSlot =
-          dragStartDay.slots[Number(currentTouchedSlotIndex)];
+          dragStartDay.slots[Number(currentTouchedSlotIndex) - 1];
 
         handleSlotHover({ event, slot: currentTouchedSlot, day: dragStartDay });
       }
