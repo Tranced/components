@@ -46,6 +46,7 @@
   import BackIcon from "./assets/left-arrow.svg";
   import NextIcon from "./assets/right-arrow.svg";
   import { isAvailable, isUnavailable } from "./method/slot";
+  import day from "components/day";
 
   //#region props
   export let id: string = "";
@@ -136,8 +137,40 @@
   let manifest: Partial<Manifest> = {};
   let editorManifest: Partial<EditorManifest> = {};
   let loading: boolean;
+  let dayRef: Array<HTMLElement> = [];
   let slotRef: Array<HTMLElement> = [];
   let slotYPositions: Record<string, DOMRect> = {};
+  let dayXPositions: Record<string, DOMRect> = {};
+
+  const recalibrateSlotPositions = (ref: Array<HTMLElement>) =>
+    ref.reduce<Record<string, DOMRect>>((allPositions, currentSlot, i) => {
+      if (currentSlot) allPositions[i] = currentSlot.getBoundingClientRect();
+      return allPositions;
+    }, {});
+
+  $: {
+    if (dates_to_show || show_ticks || show_as_week || show_weekends) {
+      // Changes to these props will resize the width of day container
+      dayRef = dayRef.filter(Boolean);
+      dayXPositions = recalibrateSlotPositions(dayRef);
+      // slotRef = slotRef.filter(Boolean);
+      //   console.log("slotYPositions:", slotYPositions);
+    }
+  }
+
+  $: {
+    if (
+      start_hour ||
+      end_hour ||
+      slot_size ||
+      show_header ||
+      allow_date_change
+    ) {
+      // Changes to these props changes the height of our slot buttons
+      slotRef = slotRef.filter(Boolean);
+      slotYPositions = recalibrateSlotPositions(slotRef);
+    }
+  }
 
   const recalibrateSlotPositions = (ref: Array<HTMLElement>) =>
     ref.reduce<Record<string, DOMRect>>((allPositions, currentSlot, i) => {
@@ -204,7 +237,7 @@
     if (id) {
       let contact = $ContactStore[JSON.stringify(contactQuery)];
       if (!contact) {
-        contact = await ContactStore.addContact(contact_query);
+        contact = await ContactStore.addContact(contactQuery);
       }
       return contact[0] ?? {};
     }
@@ -1349,7 +1382,11 @@
 
   function handleSlotInteractionEnd({ slot, day }: SlotInteractionHandler) {
     if ((mouseIsDown || touchIsDown) && slot) {
-      if (document.activeElement) document.activeElement.blur();
+      if (
+        document.activeElement &&
+        document.activeElement instanceof HTMLElement
+      )
+        document.activeElement.blur();
 
       endDrag(day);
     }
@@ -1363,13 +1400,31 @@
       event.touches.length === 1 &&
       event.changedTouches.length === 1 // check if there is a single touch point
     ) {
-      const { pageX, pageY: touchPositionY } = event.changedTouches[0];
+      const { pageX: touchPositionX, pageY: touchPositionY } =
+        event.changedTouches[0];
+      console.log("position:", touchPositionX, touchPositionY);
+
+      const currentTouchedDayPosition = Object.entries(dayXPositions).find(
+        ([_, dayPosition]) => dayPosition.x > touchPositionX,
+      );
 
       const currentTouchedSlotPosition = Object.entries(slotYPositions).find(
         ([_, slotPosition]) => slotPosition.y > touchPositionY,
       );
 
+      // console.log(
+      //   "elements touched:",
+      //   currentTouchedDayPosition[1],
+      //   currentTouchedSlotPosition[1],
+      // );
+
       if (currentTouchedSlotPosition && dragStartDay) {
+        let hoveredDay = dragStartDay;
+        if (currentTouchedDayPosition) {
+          const [currentTouchedDayIndex] = currentTouchedDayPosition;
+          hoveredDay = days[Number(currentTouchedDayIndex)];
+        }
+
         const [currentTouchedSlotIndex] = currentTouchedSlotPosition;
 
         currentTouchedSlot =
@@ -1411,6 +1466,12 @@
   @import "./styles/availability.scss";
 </style>
 
+<svelte:window
+  on:resize={() => {
+    slotYPositions = recalibrateSlotPositions(slotRef);
+    dayXPositions = recalibrateSlotPositions(dayRef);
+  }}
+/>
 <nylas-error {id} />
 <main
   bind:this={main}
@@ -1498,8 +1559,12 @@
     bind:this={dayContainer}
     bind:clientWidth={dayContainerWidth}
   >
-    {#each days as day}
-      <div class="day">
+    {#each days as day, dayIndex (day.timestamp.toISOString())}
+      <div
+        class="day"
+        data-timestamp={day.timestamp.toISOString()}
+        bind:this={dayRef[dayIndex]}
+      >
         <header>
           <h2>
             {#if date_format === "date" || date_format === "full"}
@@ -1544,7 +1609,7 @@
             {/each}
           </div>
           <div class="slots">
-            {#each day.slots as slot, i (slot.start_time.toISOString())}
+            {#each day.slots as slot, slotIndex (slot.start_time.toISOString())}
               <button
                 data-available-calendars={slot.available_calendars.toString()}
                 aria-label="{new Date(
@@ -1552,7 +1617,7 @@
                 ).toLocaleString()} to {new Date(
                   slot.end_time,
                 ).toLocaleString()}; Free calendars: {slot.available_calendars.toString()}"
-                bind:this={slotRef[i]}
+                bind:this={slotRef[slotIndex]}
                 class="slot {slot.selectionStatus} {slot.availability}"
                 class:pending={slot.selectionPending}
                 class:hovering={slot.hovering}
@@ -1619,6 +1684,15 @@
                     }
                   }
                 }}
+                on:touchstart={(event) =>
+                  handleSlotInteractionStart({ event, slot, day })}
+                on:touchmove={(event) => handleSlotHover({ event, slot, day })}
+                on:touchend={(event) =>
+                  handleSlotInteractionEnd({
+                    event,
+                    slot,
+                    day,
+                  })}
               >
                 {#if getBlockTimes(slot, day)}
                   <span class="selected-heading"
