@@ -152,11 +152,10 @@
     if (dates_to_show || show_ticks || show_as_week || show_weekends) {
       // Changes to these props will resize the width of day container
       dayRef = dayRef.filter(Boolean);
-      dayXPositions = recalibrateSlotPositions(dayRef);
-      // slotRef = slotRef.filter(Boolean);
-      //   console.log("slotYPositions:", slotYPositions);
     }
   }
+
+  $: dayXPositions = recalibrateSlotPositions(dayRef);
 
   $: {
     if (
@@ -168,29 +167,16 @@
     ) {
       // Changes to these props changes the height of our slot buttons
       slotRef = slotRef.filter(Boolean);
-      slotYPositions = recalibrateSlotPositions(slotRef);
     }
   }
+
+  $: slotYPositions = recalibrateSlotPositions(slotRef);
 
   const recalibrateSlotPositions = (ref: Array<HTMLElement>) =>
     ref.reduce<Record<string, DOMRect>>((allPositions, currentSlot, i) => {
       if (currentSlot) allPositions[i] = currentSlot.getBoundingClientRect();
       return allPositions;
     }, {});
-
-  $: {
-    if (
-      start_hour ||
-      end_hour ||
-      slot_size ||
-      show_header ||
-      allow_date_change
-    ) {
-      // Changes to these props changes the height of our slot buttons
-      slotRef = slotRef.filter(Boolean);
-      slotYPositions = recalibrateSlotPositions(slotRef);
-    }
-  }
 
   $: calendarID = "";
   onMount(async () => {
@@ -1412,11 +1398,13 @@
         ([_, slotPosition]) => slotPosition.y > touchPositionY,
       );
 
-      // console.log(
-      //   "elements touched:",
-      //   currentTouchedDayPosition[1],
-      //   currentTouchedSlotPosition[1],
-      // );
+      console.log(
+        "elements touched:",
+        currentTouchedDayPosition &&
+          `${currentTouchedDayPosition[0]} ${currentTouchedDayPosition[1]}`,
+        currentTouchedSlotPosition &&
+          `${currentTouchedSlotPosition[0]} ${currentTouchedSlotPosition[1]}`,
+      );
 
       if (currentTouchedSlotPosition && dragStartDay) {
         let hoveredDay = dragStartDay;
